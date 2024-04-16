@@ -7,6 +7,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -37,10 +38,25 @@ class FCMService : FirebaseMessagingService() {
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
-
-        message.data[action]?.let {
-            when (Action.valueOf(it)) {
-                Action.LIKE -> handleLike(gson.fromJson(message.data[content], Like::class.java))
+        //println(Gson().toJson(message))
+        //Log.d("FCMService", message.data.toString())
+        //println(message.data[content].toString())
+        if(message.data[action] == null){
+            val pushMessage = gson.fromJson(message.data[content], PushMessage::class.java)
+            when(pushMessage.recipientId){
+                null ,AppAuth.getInstance().authStateFlow.value.id.toString() -> handlePush(pushMessage)
+                else -> AppAuth.getInstance().sendPushToken()
+            }
+        }else {
+            message.data[action]?.let {
+                when (Action.valueOf(it)) {
+                    Action.LIKE -> handleLike(
+                        gson.fromJson(
+                            message.data[content],
+                            Like::class.java
+                        )
+                    )
+                }
             }
         }
     }
@@ -65,6 +81,25 @@ class FCMService : FirebaseMessagingService() {
         notify(notification)
     }
 
+    private fun handlePush(content: PushMessage){
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(
+                getString(
+                    R.string.channel_remote_description
+                )
+            )
+            .setContentText(
+                content.content
+            )
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+
+        notify(notification)
+
+    }
+
+
     private fun notify(notification: Notification) {
         if (
             Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
@@ -87,5 +122,10 @@ data class Like(
     val userName: String,
     val postId: Long,
     val postAuthor: String,
+)
+
+data class PushMessage(
+    val recipientId: String?,
+    val content: String,
 )
 
